@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # MQTT Broker (Mosquitto)
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0
+    container_name: aqua-nexus-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # Backend Processing & Detection Engine (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aqua-nexus-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+      - DATABASE_URL=sqlite+aiosqlite:///./aqua_nexus.db
+      - DATABASE_SYNC_URL=sqlite:///./aqua_nexus.db
+    depends_on:
+      - mqtt-broker
+
+  # Virtual IoT ESP32 Multi-Sensor Simulator
+  simulator:
+    build:
+      context: .
+      dockerfile: simulator/Dockerfile
+    container_name: aqua-nexus-simulator
+    restart: unless-stopped
+    environment:
+      - MQTT_BROKER_HOST=mqtt-broker
+      - MQTT_BROKER_PORT=1883
+    depends_on:
+      - mqtt-broker
+
+  # Frontend Dashboard (React + Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aqua-nexus-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
